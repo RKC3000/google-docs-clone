@@ -5,11 +5,81 @@ import Icon from '@material-tailwind/react/Icon';
 import Image from "next/image";
 import { getSession, useSession } from "next-auth/client";
 import Login from '../components/Login';
+import Modal from "@material-tailwind/react/Modal";
+import ModalBody from "@material-tailwind/react/ModalBody";
+import ModalFooter from "@material-tailwind/react/ModalFooter";
+import { useState } from 'react';
+import { db } from '../firebase';
+import firebase from 'firebase';
+import {
+  useCollectionOnce
+} from "react-firebase-hooks/firestore";
+import DocumentRow from '../components/DocumentRow';
 
 export default function Home() {
   const [session] = useSession();
-
   if (!session) return <Login />
+
+  const [showModal, setShowModal] = useState(false);
+  const [input, setInput] = useState("");
+  const [snapshot] = useCollectionOnce(
+    db
+      .collection("userDocs")
+      .doc(session.user.email)
+      .collection("docs")
+      .orderBy("timestamp", "desc")
+  );
+  const createDocument = () => {
+    if (!input) return; // don't create document if there's no input
+
+    db.collection('userDocs') // collection of user documents
+      .doc(session.user.email) // get user document through there email
+      .collection('docs') // collection of user's documents
+      .add({
+        fileName: input,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(), // server timestamp
+      });
+    
+    setInput("");
+    setShowModal(false);
+  };
+
+  const modal = (
+    <Modal
+      size="sm"
+      active={showModal}
+      toggler={() => setShowModal(false)}
+    >
+      <ModalBody>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          type="text"
+          className="outline-none w-full"
+          placeholder="Enter name of document..."
+          onKeyDown={(e) => e.key === "Enter" && createDocument()}
+        />
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          color="blue"
+          buttonType="link"
+          onClick={(e) => setShowModal(false)}
+          ripple="dark"
+        >
+          Cancel
+        </Button>
+
+        <Button
+          color="blue"
+          onClick={createDocument}
+          ripple="light"
+        >
+          Create
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
 
   return (
     <div>
@@ -19,6 +89,9 @@ export default function Home() {
       </Head>
 
       <Header />
+      {modal}
+
+
       <section className="bg-[#F8F9FA] pb-10 px-10">
         <div className="max-w-3xl mx-auto">
           <div className=" flex items-center justify-between py-6">
@@ -35,7 +108,10 @@ export default function Home() {
             </Button>
           </div>
           <div>
-            <div className="relative h-52 w-40 border-2 cursor-pointer hover:border-blue-700">
+            <div
+              onClick={() => setShowModal(true)}
+              className="relative h-52 w-40 border-2 cursor-pointer hover:border-blue-700"
+            >
               <Image
                 src="https://links.papareact.com/pju"
                 layout="fill"
@@ -56,8 +132,25 @@ export default function Home() {
             <p className="mr-12 ">Date Created</p>
             <Icon name="folder" size="3xl" color="gray" />
           </div>
+          {snapshot?.docs.map(doc => (
+            <DocumentRow
+              key={doc.id}
+              id={doc.id}
+              fileName={doc.data().fileName}
+              date={doc.data().timestamp}
+            />
+          ))}
         </div>
       </section>
     </div>
-  )
+  );
+}
+
+export async function getServerSideProps(context) {
+  const session = await getSession(context);
+  return {
+    props: {
+      session,
+    },
+  };
 }

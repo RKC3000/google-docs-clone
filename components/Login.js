@@ -21,7 +21,7 @@ function Login() {
                 Login
             </Button>
         </div>
-    )
+    );
 }
 
 export default Login;
